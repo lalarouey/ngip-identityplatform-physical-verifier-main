@@ -1,0 +1,24 @@
+services:
+  verifier-backend:
+    container_name: verifier-backend
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "3008:3008"
+    env_file:
+      - ./backend/.env
+    volumes:
+      - ./backend/data:/app/data
+    restart: unless-stopped
+
+  verifier-frontend:
+    container_name: verifier-frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "5176:80"
+    depends_on:
+      - verifier-backend
+    restart: unless-stopped
