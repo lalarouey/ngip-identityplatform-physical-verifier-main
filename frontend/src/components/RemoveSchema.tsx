@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { Socket } from 'socket.io-client';
 import {
   Button,
   Card,
@@ -10,38 +9,55 @@ import {
   TextInput,
   Title,
 } from '@mantine/core';
+import { notifications } from '@mantine/notifications';
+import { api } from '../api';
 
 interface IRemoveSchemaProps {
-  socket: Socket;
-  success: boolean | null;
+  verifierDID: string | null;
+  onSchemaRemoved?: () => void;
 }
 
-export default function RemoveSchema({ socket, success }: IRemoveSchemaProps) {
+export default function RemoveSchema({ verifierDID, onSchemaRemoved }: IRemoveSchemaProps) {
   const [schemaName, setSchemaName] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const [status, setStatus] = useState<string>('');
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
+    
+    if (!verifierDID) {
+      notifications.show({
+        title: 'Validation Error',
+        message: 'Verifier DID is not available.',
+        color: 'red',
+      });
+      return;
+    }
+
     if (
       window.confirm(
         `Are you sure you want to delete the schema "${schemaName}"?`,
       )
     ) {
-      if (!socket.connected) {
-        setIsLoading(false);
-        setStatus('Socket connection not established.');
-        return;
-      }
-      socket.emit('remove-schema', schemaName);
       setIsLoading(true);
-      setStatus('Removing schema...');
-      if (success === false) {
+      try {
+        await api.removeSchema(schemaName, verifierDID);
+        notifications.show({
+          title: 'Success',
+          message: 'Schema removed successfully.',
+          color: 'green',
+        });
+        setSchemaName('');
+        if (onSchemaRemoved) {
+          onSchemaRemoved();
+        }
+      } catch (error) {
+        notifications.show({
+          title: 'Error',
+          message: error instanceof Error ? error.message : 'Failed to remove schema.',
+          color: 'red',
+        });
+      } finally {
         setIsLoading(false);
-        setStatus('Failed to remove schema.');
-      } else if (success) {
-        setIsLoading(false);
-        setStatus('Schema removed successfully.');
       }
     }
   };
@@ -73,15 +89,6 @@ export default function RemoveSchema({ socket, success }: IRemoveSchemaProps) {
             </Button>
           </Flex>
         </form>
-        {status && (
-          <Text
-            ta='center'
-            c={status.includes('successfully') ? 'green' : 'red'}
-            style={{ marginTop: '20px' }}
-          >
-            {status}
-          </Text>
-        )}
       </Card>
     </Center>
   );

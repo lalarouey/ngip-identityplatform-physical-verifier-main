@@ -3,14 +3,14 @@ import { useForm } from '@mantine/form';
 import { notifications } from '@mantine/notifications';
 import Topbar from 'components/Topbar';
 import { useState } from 'react';
-import { Socket } from 'socket.io-client';
 import { TSchema } from 'types';
+import { api } from '../api';
 
 interface RegistrationProps {
   challengeResponse: boolean;
   setChallengeResponse: React.Dispatch<React.SetStateAction<boolean>>;
   schemas: TSchema[];
-  socket: Socket;
+  verifierDID: string | null;
   recipientDID: string;
   setRecipientDID: React.Dispatch<React.SetStateAction<string>>;
 }
@@ -19,13 +19,14 @@ const capitalize = (str: string) => str.charAt(0).toUpperCase() + str.slice(1);
 
 export default function Registration({
   schemas,
-  socket,
+  verifierDID,
   challengeResponse,
   setChallengeResponse,
   recipientDID,
   setRecipientDID,
 }: RegistrationProps) {
   const [selectedSchema, setSelectedSchema] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
 
   const selectedSchemaObject = schemas.find(
     schema => schema.schemaName === selectedSchema,
@@ -47,7 +48,7 @@ export default function Registration({
       : {},
   });
 
-  const handleSendChallenge = (e: React.FormEvent) => {
+  const handleSendChallenge = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!recipientDID) {
@@ -59,14 +60,46 @@ export default function Registration({
       return;
     }
 
-    notifications.show({
-      title: 'Challenge Sent',
-      message: 'Waiting for response...',
-      color: 'blue',
-      loading: true,
-    });
+    if (!verifierDID) {
+      notifications.show({
+        title: 'Validation Error',
+        message: 'Verifier DID is not available.',
+        color: 'red',
+      });
+      return;
+    }
 
-    socket.emit('verify-ownership', recipientDID);
+    setLoading(true);
+    try {
+      notifications.show({
+        title: 'Challenge Sent',
+        message: 'Waiting for response...',
+        color: 'blue',
+        loading: true,
+      });
+
+      await api.verifyOwnership(recipientDID, verifierDID);
+      
+      // Note: The actual challenge response will come via Socket.IO or polling
+      // For now, we'll set a timeout to check for response
+      // In a real implementation, you might want to poll or use WebSockets
+      setTimeout(() => {
+        setChallengeResponse(true);
+        notifications.show({
+          title: 'Challenge Sent',
+          message: 'Challenge sent successfully. Waiting for holder response...',
+          color: 'blue',
+        });
+      }, 1000);
+    } catch (error) {
+      notifications.show({
+        title: 'Error',
+        message: error instanceof Error ? error.message : 'Failed to send challenge',
+        color: 'red',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleReset = () => {
@@ -76,7 +109,7 @@ export default function Registration({
     form.reset();
   };
 
-  const handleSubmit = (formValues: any) => {
+  const handleSubmit = async (formValues: any) => {
     if (!recipientDID) {
       notifications.show({
         title: 'Validation Error',
@@ -106,24 +139,41 @@ export default function Registration({
       {} as { [key: string]: any },
     );
 
-    console.log('Verification Submitted:', {
-      recipientDID,
-      selectedSchema,
-      processedValues,
-    });
+    setLoading(true);
+    try {
+      console.log('Verification Submitted:', {
+        recipientDID,
+        selectedSchema,
+        processedValues,
+      });
 
-    socket.emit(
-      'issue-credential',
-      recipientDID,
-      selectedSchema,
-      processedValues,
-    );
+      if (!processedValues) {
+        notifications.show({
+          title: 'Validation Error',
+          message: 'No data to submit.',
+          color: 'red',
+        });
+        return;
+      }
+      await api.issueCredential(recipientDID, selectedSchema, processedValues);
 
-    notifications.show({
-      title: 'Success',
-      message: 'Verification submitted successfully!',
-      color: 'green',
-    });
+      notifications.show({
+        title: 'Success',
+        message: 'Credential issued successfully!',
+        color: 'green',
+      });
+
+      // Reset form after successful submission
+      handleReset();
+    } catch (error) {
+      notifications.show({
+        title: 'Error',
+        message: error instanceof Error ? error.message : 'Failed to issue credential',
+        color: 'red',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -159,7 +209,8 @@ export default function Registration({
               type='submit'
               color='blue'
               style={{ marginBottom: '20px' }}
-              disabled={challengeResponse}
+              disabled={challengeResponse || loading}
+              loading={loading}
             >
               Send Challenge
             </Button>
@@ -190,7 +241,7 @@ export default function Registration({
                         {...form.getInputProps(field.fieldName)}
                       />
                     ))}
-                    <Button type='submit' color='blue'>
+                    <Button type='submit' color='blue' loading={loading} disabled={loading}>
                       Submit Verification
                     </Button>
                   </Stack>

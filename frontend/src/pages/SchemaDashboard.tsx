@@ -2,52 +2,64 @@ import RegisterSchema from 'components/RegisterSchema';
 import RemoveSchema from 'components/RemoveSchema';
 import SchemaListView from 'components/SchemaView';
 import { useState } from 'react';
-import { Socket } from 'socket.io-client';
-import { TSchema } from 'types';
+import { TSchema, TField } from 'types';
 import Topbar from '../components/Topbar';
+import { api } from '../api';
 
 interface ISchemaDashboardProps {
-  schemaRegSuccess: boolean | null;
-  schemaRemoveSuccess: boolean | null;
   schemas: TSchema[];
   setSchemas: (schemas: TSchema[]) => void;
-  socket: Socket;
+  verifierDID: string | null;
 }
 
 export default function SchemaDashboard({
-  schemaRegSuccess,
-  schemaRemoveSuccess,
   schemas,
   setSchemas,
-  socket,
+  verifierDID,
 }: ISchemaDashboardProps) {
   const [activeSubTab, setSubActiveTab] = useState('schemas');
 
-  if (socket.id === undefined) {
-    return <div>Socket connection not established.</div>;
-  }
+  const refreshSchemas = async () => {
+    try {
+      const result = await api.getSchemas();
+      // Convert Schema[] to TSchema[] by ensuring schemaFields is a tuple
+      const convertedSchemas: TSchema[] = result.schemas.map((schema) => ({
+        ...schema,
+        schemaFields: schema.schemaFields.length > 0 
+          ? [schema.schemaFields[0], ...schema.schemaFields.slice(1)] as [TField, ...TField[]]
+          : [{ fieldName: '', type: 'string' }] as [TField, ...TField[]]
+      }));
+      setSchemas(convertedSchemas);
+    } catch (error) {
+      console.error('Failed to refresh schemas:', error);
+    }
+  };
 
   const renderComponent = () => {
-    if (!socket.connected) {
-      return;
-    }
     switch (activeSubTab) {
       case 'registerSchema':
         return (
-          <RegisterSchema schemaRegSuccess={schemaRegSuccess} socket={socket} />
+          <RegisterSchema 
+            verifierDID={verifierDID} 
+            onSchemaRegistered={refreshSchemas}
+          />
         );
       case 'deleteSchema':
-        return <RemoveSchema socket={socket} success={schemaRemoveSuccess} />;
+        return (
+          <RemoveSchema 
+            verifierDID={verifierDID} 
+            onSchemaRemoved={refreshSchemas}
+          />
+        );
       case 'schemas':
         return (
           <SchemaListView
-            socket={socket}
             schemas={schemas}
             setSchemas={setSchemas}
           />
         );
       default:
-        'schemas';
+        return null;
     }
   };
 

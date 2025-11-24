@@ -1,7 +1,7 @@
 import { Button, Card, Divider, Flex, Text, Title } from '@mantine/core';
-import { useCallback, useEffect, useState } from 'react';
-import { Socket } from 'socket.io-client';
+import { useEffect, useState } from 'react';
 import { TField, TSchema } from 'types';
+import { api } from '../api';
 
 interface schemaViewProps {
   schema: TSchema;
@@ -31,48 +31,26 @@ export function SchemaView({ schema }: schemaViewProps) {
 }
 
 interface schemaListView {
-  socket: Socket;
   schemas: TSchema[];
   setSchemas: (schemas: TSchema[]) => void;
 }
 
 export default function SchemaListView({
-  socket,
   schemas,
   setSchemas,
 }: schemaListView) {
-  const [status, setStatus] = useState<string>('');
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    handleSchemasRetrieved(schemas);
-  }, [schemas]);
-
-  const handleSchemasRetrieved = useCallback((schemas: TSchema[] | boolean) => {
-    if (Array.isArray(schemas) && schemas.every(isTSchema)) {
-      setSchemas(schemas);
-    } else {
-      setStatus('Error listing schemas.');
+  async function handleRefresh() {
+    setLoading(true);
+    try {
+      const result = await api.getSchemas();
+      setSchemas(result.schemas);
+    } catch (error) {
+      console.error('Failed to refresh schemas:', error);
+    } finally {
+      setLoading(false);
     }
-  }, []);
-
-  function isTSchema(schema: any): schema is TSchema {
-    return (
-      typeof schema === 'object' &&
-      typeof schema.schemaName === 'string' &&
-      Array.isArray(schema.schemaFields) &&
-      schema.schemaFields.every(
-        (field: TField) =>
-          typeof field.fieldName === 'string' && typeof field.type === 'string',
-      )
-    );
-  }
-
-  function handleRefresh() {
-    if (!socket.connected) {
-      setStatus('Socket connection not established.');
-      return;
-    }
-    socket.emit('retrieve-schemas');
   }
 
   return (
@@ -85,7 +63,7 @@ export default function SchemaListView({
       }}
     >
       <Flex justify='center' align='center' direction='column' gap='md'>
-        <Button color='gray' onClick={handleRefresh}>
+        <Button color='gray' onClick={handleRefresh} loading={loading}>
           Refresh List
         </Button>
         {schemas.length > 0 ? (
@@ -95,7 +73,6 @@ export default function SchemaListView({
         ) : (
           <Text style={{ textTransform: 'capitalize' }}>No Schemas found.</Text>
         )}
-        <Text style={{ textTransform: 'capitalize' }}>{status}</Text>
       </Flex>
     </div>
   );

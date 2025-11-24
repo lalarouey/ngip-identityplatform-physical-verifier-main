@@ -1,12 +1,12 @@
-import { Socket } from 'socket.io';
-import { TSchema } from 'types.js';
+import { Socket } from "socket.io";
+import { TSchema } from "types.js";
 import {
   getSchema,
   getSchemaNames,
   registerSchema,
   registerSchemaWithFlag,
   removeSchema,
-} from '../schemaRegistry.js';
+} from "../schemaRegistry.js";
 
 /**
  * This function listens for schema registration requests on a socket and registers the schema on the schema registry.
@@ -22,9 +22,8 @@ import {
  * registerSchemaOnSocket(socket);
  */
 export async function registerSchemaOnSocket(
-  socket: Socket,
   schema: TSchema,
-  issuerDID: string,
+  issuerDID: string
 ) {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] Received schema registration request...`);
@@ -36,19 +35,21 @@ export async function registerSchemaOnSocket(
       await registerSchemaWithFlag(
         issuerDID,
         schema,
-        schema.requiresPhysicalVerification,
+        schema.requiresPhysicalVerification
       );
     }
     console.log(`[${timestamp}] Schema registered:`, schema);
-    socket.emit('schema-registration', true);
+    return true;
+    // socket.emit("schema-registration", true);
   } catch (error) {
     const errorMessage =
-      error instanceof Error ? error.message : 'Failed to register schema';
+      error instanceof Error ? error.message : "Failed to register schema";
     console.error(`[${timestamp}] Error while registering schema:`, error);
-    socket.emit('custom-error', {
-      title: 'Failed to register schema',
-      errorMessage,
-    });
+    throw error;
+    // socket.emit("custom-error", {
+    //   title: "Failed to register schema",
+    //   errorMessage,
+    // });
   }
 }
 
@@ -66,9 +67,8 @@ export async function registerSchemaOnSocket(
  * removeSchemaOnSocket(socket);
  */
 export async function removeSchemaOnSocket(
-  socket: Socket,
   schemaName: string,
-  issuerDID: string,
+  issuerDID: string
 ) {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] Received schema removal request...`);
@@ -76,15 +76,17 @@ export async function removeSchemaOnSocket(
   try {
     await removeSchema(issuerDID, schemaName);
     console.log(`[${timestamp}] Schema removed:`, schemaName);
-    socket.emit('schema-removal', true);
+    return true;
+    // socket.emit("schema-removal", true);
   } catch (error) {
     const errorMessage =
-      error instanceof Error ? error.message : 'Failed to remove schema';
+      error instanceof Error ? error.message : "Failed to remove schema";
     console.error(`[${timestamp}] Error removing schema:`, error);
-    socket.emit('custom-error', {
-      title: 'Failed to remove Schema',
-      errorMessage,
-    });
+    // socket.emit("custom-error", {
+    //   title: "Failed to remove Schema",
+    //   errorMessage,
+    // });
+    throw error;
   }
 }
 
@@ -101,29 +103,64 @@ export async function removeSchemaOnSocket(
  * @example
  * listSchemasOnSocket(socket);
  */
-export async function listSchemasOnSocket(socket: Socket, issuerDID: string) {
-  const timestamp = new Date().toISOString();
-  console.log(`[${timestamp}] Received schema retrieval request...`);
+export async function listSchemasOnSocket(verifierDIDs: string[]) {
+  console.log(
+    `[${new Date().toISOString()}] Received schema retrieval request...`
+  );
 
   try {
-    const schemaNames = await getSchemaNames(issuerDID);
+    // const schemaNames = await getSchemaNames(issuerDID);
 
-    const schemas = await Promise.all(
-      schemaNames.map(async name => {
-        const schema = (await getSchema(issuerDID, name)) as TSchema;
-        return schema;
-      }),
+    // const schemas = await Promise.all(
+    //   schemaNames.map(async name => {
+    //     const schema = (await getSchema(issuerDID, name)) as TSchema;
+    //     return schema;
+    //   }),
+    // );
+
+    const allSchemas = await Promise.all(
+      verifierDIDs.map(async (verifierDID) => {
+        try {
+          const schemaNames = await getSchemaNames(verifierDID);
+
+          const schemas = await Promise.all(
+            schemaNames.map(async (name) => {
+              const schema = (await getSchema(verifierDID, name)) as TSchema;
+              return {
+                ...schema,
+                verifierDID,
+              };
+            })
+          );
+
+          return schemas;
+        } catch (err) {
+          console.error(
+            `[${new Date().toISOString()}] Failed to get schemas for DID ${verifierDID}:`,
+            err
+          );
+          return []; // skip this DID if it fails
+        }
+      })
     );
-
-    console.log(`[${timestamp}] Schemas retrieved:`, schemas);
-    socket.emit('schema-retrieval', schemas);
+    const flattenedSchemas = allSchemas.flat();
+    console.log(
+      `[${new Date().toISOString()}] Schemas retrieved:`,
+      flattenedSchemas
+    );
+    // socket.emit("schema-retrieval", flattenedSchemas);
+    return flattenedSchemas;
   } catch (error) {
     const errorMessage =
-      error instanceof Error ? error.message : 'Failed to get schemas';
-    console.error(`[${timestamp}] Error getting schemas:`, error);
-    socket.emit('custom-error', {
-      title: 'Failed to get schemas',
-      errorMessage,
-    });
+      error instanceof Error ? error.message : "Failed to get schemas";
+    console.error(
+      `[${new Date().toISOString()}] Error getting schemas:`,
+      error
+    );
+    // socket.emit("custom-error", {
+    //   title: "Failed to get Schemas",
+    //   errorMessage,
+    // });
+    throw error;
   }
 }

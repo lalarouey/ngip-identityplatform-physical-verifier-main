@@ -1,42 +1,23 @@
-import { useEffect, useState } from 'react';
-import { Socket } from 'socket.io-client';
+import { useState } from 'react';
 import { TField, TSchema } from 'types';
 import { Button, Flex, Loader, Select, TextInput, Title } from '@mantine/core';
 import { notifications } from '@mantine/notifications';
+import { api } from '../api';
 
 interface RegisterSchemaProps {
-  socket: Socket;
-  schemaRegSuccess: boolean | null;
+  verifierDID: string | null;
+  onSchemaRegistered?: () => void;
 }
 
 export default function RegisterSchema({
-  socket,
-  schemaRegSuccess,
+  verifierDID,
+  onSchemaRegistered,
 }: RegisterSchemaProps) {
   const [schemaName, setSchemaName] = useState<string>('');
   const [schemaFields, setSchemaFields] = useState<TField[]>([
     { fieldName: '', type: 'string' },
   ]);
   const [isLoading, setIsLoading] = useState<boolean>(false);
-
-  useEffect(() => {
-    setIsLoading(false);
-    if (schemaRegSuccess) {
-      notifications.show({
-        title: 'Success',
-        message: 'Schema registered successfully.',
-        color: 'green',
-      });
-      setSchemaName('');
-      setSchemaFields([{ fieldName: '', type: 'string' }]);
-    } else if (schemaRegSuccess === false) {
-      notifications.show({
-        title: 'Error',
-        message: 'Failed to register schema.',
-        color: 'red',
-      });
-    }
-  }, [schemaRegSuccess]);
 
   const handleAddField = () => {
     setSchemaFields([...schemaFields, { fieldName: '', type: 'string' }]);
@@ -54,21 +35,55 @@ export default function RegisterSchema({
     setSchemaFields(newFields);
   };
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
-    const schema: TSchema = {
-      schemaName: schemaName,
-      schemaFields: [schemaFields[0], ...schemaFields.slice(1)],
-    };
-    if (!socket.connected) {
+    
+    if (!verifierDID) {
       notifications.show({
-        title: 'Connection Error',
-        message: 'Socket connection not established.',
+        title: 'Validation Error',
+        message: 'Verifier DID is not available.',
         color: 'red',
       });
-    } else {
-      setIsLoading(true);
-      socket.emit('register-schema', schema);
+      return;
+    }
+
+    // Validate fields
+    const validFields = schemaFields.filter(f => f.fieldName.trim() !== '');
+    if (validFields.length === 0) {
+      notifications.show({
+        title: 'Validation Error',
+        message: 'At least one field is required.',
+        color: 'red',
+      });
+      return;
+    }
+
+    const schema: TSchema = {
+      schemaName: schemaName,
+      schemaFields: [validFields[0], ...validFields.slice(1)] as [TField, ...TField[]],
+    };
+
+    setIsLoading(true);
+    try {
+      await api.registerSchema(schema, verifierDID);
+      notifications.show({
+        title: 'Success',
+        message: 'Schema registered successfully.',
+        color: 'green',
+      });
+      setSchemaName('');
+      setSchemaFields([{ fieldName: '', type: 'string' }]);
+      if (onSchemaRegistered) {
+        onSchemaRegistered();
+      }
+    } catch (error) {
+      notifications.show({
+        title: 'Error',
+        message: error instanceof Error ? error.message : 'Failed to register schema.',
+        color: 'red',
+      });
+    } finally {
+      setIsLoading(false);
     }
   };
 

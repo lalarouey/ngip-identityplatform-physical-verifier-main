@@ -1,31 +1,27 @@
-import { notifications } from '@mantine/notifications';
-import MyPage from 'components/MyPage';
-import Sidebar from 'components/Sidebar';
-import Registration from 'pages/Registration';
-import Reports from 'pages/Reports';
-import { useEffect, useState } from 'react';
-import { io, Socket } from 'socket.io-client';
-import { TReport, TSchema } from 'types';
-import SchemaDashboard from './SchemaDashboard';
+import { notifications } from "@mantine/notifications";
+import MyPage from "components/MyPage";
+import Sidebar from "components/Sidebar";
+import Registration from "pages/Registration";
+import Reports from "pages/Reports";
+import { useEffect, useState } from "react";
+import { io, Socket } from "socket.io-client";
+import { TReport, TSchema, TField } from "types";
+import SchemaDashboard from "./SchemaDashboard";
+import { api } from "../api";
 
 export default function PhysicalVerifier() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<
-    'registration' | 'reports' | 'schemaDashboard' | 'myPage' | null
+    "registration" | "reports" | "schemaDashboard" | "myPage" | null
   >(null);
-  const [schemaRemoveSuccess, setSchemaRemoveSuccess] = useState<
-    boolean | null
-  >(null);
-  const [schemaRegSuccess, setSchemaRegSuccess] = useState<boolean | null>(
-    null,
-  );
   const [schemas, setSchemas] = useState<TSchema[]>([]);
-  const [did, setDid] = useState<string | null>(null);
+  const [dids, setDids] = useState<string[]>([]);
+  const [verifierDID, setVerifierDID] = useState<string | null>(null);
   const [ethAddress, setEthAddress] = useState<string | null>(null);
   const [balance, setBalance] = useState<number | null>(null);
   const [challengeResponse, setChallengeResponse] = useState(false);
-  const [recipientDID, setRecipientDID] = useState('');
+  const [recipientDID, setRecipientDID] = useState("");
   const [abuseReports, setAbuseReports] = useState<TReport[]>([]);
   const [revealedIdentities, setRevealedIdentities] = useState<
     Record<string, any>
@@ -33,97 +29,82 @@ export default function PhysicalVerifier() {
 
   const connectSocket = () => {
     if (!socket) {
-      const newSocket = io('http://localhost:3008');
+      const newSocket = io("http://localhost:3008");
 
-      newSocket.on('connect', () => {
+      newSocket.on("connect", () => {
         setConnected(true);
       });
 
       newSocket.on(
-        'challenge-response',
+        "challenge-response",
         (holderDID: string, response: boolean) => {
           notifications.show({
-            title: 'Challenge Response',
+            title: "Challenge Response",
             message: `Challenge response for ${holderDID}: ${response}`,
-            color: response ? 'green' : 'red',
+            color: response ? "green" : "red",
           });
           setChallengeResponse(response);
-        },
+        }
       );
 
-      newSocket.on('identity-retrieved', (identityData: any) => {
+      newSocket.on("identity-retrieved", (identityData: any) => {
         if (identityData && identityData.id) {
-          setRevealedIdentities(prev => ({
+          setRevealedIdentities((prev) => ({
             ...prev,
             [identityData.id]: identityData,
           }));
         }
       });
 
-      newSocket.on('schema-registration', (success: boolean) => {
-        setSchemaRegSuccess(success);
-      });
+      // Schema updates are now handled via REST API
+      // Socket events can still be used for real-time notifications if needed
 
-      newSocket.on('schema-retrieval', (schemas: TSchema[]) => {
-        setSchemas(schemas);
-      });
+      // Note: identifier-info is now fetched via REST API
+      // Socket events for real-time updates can still be used if needed
 
-      newSocket.on('schema-removal', (success: boolean) => {
-        setSchemaRemoveSuccess(success);
-      });
-
-      newSocket.on(
-        'identifier-info',
-        (verifierDID: string, ethAddress: string, balance: number) => {
-          setDid(verifierDID);
-          setEthAddress(ethAddress);
-          setBalance(balance);
-        },
-      );
-
-      newSocket.on('did-initialized', () => {
+      newSocket.on("did-initialized", () => {
         notifications.show({
-          message: 'DID has been initialized',
-          color: 'green',
+          message: "DID has been initialized",
+          color: "green",
         });
       });
 
-      newSocket.on('did-cleared', () => {
+      newSocket.on("did-cleared", () => {
         notifications.show({
-          message: 'DID has been cleared',
-          color: 'red',
+          message: "DID has been cleared",
+          color: "red",
         });
       });
 
-      newSocket.on('funds-transferred', (recipient: string) => {
+      newSocket.on("funds-transferred", (recipient: string) => {
         notifications.show({
           message: `Funds have been transferred to ${recipient}`,
-          color: 'green',
+          color: "green",
         });
       });
 
-      newSocket.on('physical-verifier-report', (report: TReport) => {
-        setAbuseReports(prev => [...prev, report]);
+      newSocket.on("physical-verifier-report", (report: TReport) => {
+        setAbuseReports((prev) => [...prev, report]);
         notifications.show({
-          title: 'New Escalated Abuse Report',
+          title: "New Escalated Abuse Report",
           message: `Abuser: ${report.holderDID}`,
-          color: 'blue',
+          color: "blue",
         });
       });
 
       newSocket.on(
-        'custom-error',
+        "custom-error",
         (error: { title: string; errorMessage: string }) => {
           notifications.show({
             title: error.title,
             message: error.errorMessage,
-            color: 'red',
+            color: "red",
           });
-        },
+        }
       );
 
       setSocket(newSocket);
-      setActiveTab('myPage');
+      setActiveTab("myPage");
     }
   };
 
@@ -135,9 +116,53 @@ export default function PhysicalVerifier() {
     }
   };
 
+  // Fetch identifier info and schemas on mount and when socket connects
+  const fetchIdentifierInfo = async () => {
+    try {
+      const info = await api.getIdentifierInfo();
+      setDids(info.verifierDIDs);
+      setVerifierDID(info.verifierDIDs[0] || null); // Use first DID as default
+      setEthAddress(info.ethAddress);
+      setBalance(parseFloat(info.balance));
+    } catch (error) {
+      notifications.show({
+        title: "Error",
+        message: error instanceof Error ? error.message : "Failed to fetch identifier info",
+        color: "red",
+      });
+    }
+  };
+
+  const fetchSchemas = async () => {
+    try {
+      const result = await api.getSchemas();
+      // Convert Schema[] to TSchema[] by ensuring schemaFields is a tuple
+      const convertedSchemas: TSchema[] = result.schemas.map((schema) => ({
+        ...schema,
+        schemaFields: schema.schemaFields.length > 0 
+          ? [schema.schemaFields[0], ...schema.schemaFields.slice(1)] as [TField, ...TField[]]
+          : [{ fieldName: '', type: 'string' }] as [TField, ...TField[]]
+      }));
+      setSchemas(convertedSchemas);
+    } catch (error) {
+      notifications.show({
+        title: "Error",
+        message: error instanceof Error ? error.message : "Failed to fetch schemas",
+        color: "red",
+      });
+    }
+  };
+
+  useEffect(() => {
+    fetchIdentifierInfo();
+    fetchSchemas();
+  }, []);
+
   useEffect(() => {
     if (socket && socket.connected) {
-      socket.emit('retrieve-schemas');
+      // Still listen for real-time schema updates via socket if needed
+      // But primary source is REST API
+      fetchSchemas();
     }
   }, [socket?.connected]);
 
@@ -146,10 +171,10 @@ export default function PhysicalVerifier() {
       return null;
     }
     switch (activeTab) {
-      case 'registration':
+      case "registration":
         return (
           <Registration
-            socket={socket}
+            verifierDID={verifierDID}
             schemas={schemas}
             challengeResponse={challengeResponse}
             setChallengeResponse={setChallengeResponse}
@@ -157,7 +182,7 @@ export default function PhysicalVerifier() {
             setRecipientDID={setRecipientDID}
           />
         );
-      case 'reports':
+      case "reports":
         return (
           <Reports
             socket={socket}
@@ -167,23 +192,22 @@ export default function PhysicalVerifier() {
             setRevealedIdentities={setRevealedIdentities}
           />
         );
-      case 'schemaDashboard':
+      case "schemaDashboard":
         return (
           <SchemaDashboard
-            schemaRegSuccess={schemaRegSuccess}
-            schemaRemoveSuccess={schemaRemoveSuccess}
             schemas={schemas}
             setSchemas={setSchemas}
-            socket={socket}
+            verifierDID={verifierDID}
           />
         );
-      case 'myPage':
+      case "myPage":
         return (
           <MyPage
-            socket={socket}
+            verifierDID={verifierDID}
             ethAddress={ethAddress}
-            did={did}
+            dids={dids}
             balance={balance}
+            onRefresh={fetchIdentifierInfo}
           />
         );
       default:
@@ -194,12 +218,12 @@ export default function PhysicalVerifier() {
   return (
     <div
       style={{
-        width: '100vw',
-        height: '100vh',
+        width: "100vw",
+        height: "100vh",
         padding: 0,
         margin: 0,
-        display: 'flex',
-        flexDirection: 'row',
+        display: "flex",
+        flexDirection: "row",
       }}
     >
       <Sidebar
@@ -212,11 +236,11 @@ export default function PhysicalVerifier() {
       <div
         style={{
           flexGrow: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          padding: '0px',
+          display: "flex",
+          flexDirection: "column",
+          padding: "0px",
           margin: 0,
-          overflowY: 'auto', // Allow scrolling for large content
+          overflowY: "auto", // Allow scrolling for large content
         }}
       >
         {socket && socket.connected && renderComponent()}

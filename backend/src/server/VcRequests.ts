@@ -1,17 +1,18 @@
-import { VerifiableCredential } from '@veramo/core';
-import { Request, Response } from 'express';
-import { Socket } from 'socket.io';
-import { TCidRow, TSchema } from 'types.js';
-import { issueCredentialWithSchema } from '../credentials.js';
-import { resolveDIDCommMessage, sendDIDCommMessage } from '../didcomm.js';
+import { VerifiableCredential } from "@veramo/core";
+import { Request, Response } from "express";
+import { Socket } from "socket.io";
+import { TCidRow, TSchema } from "types.js";
+import { issueCredentialWithSchema } from "../credentials.js";
+import { resolveDIDCommMessage, sendDIDCommMessage } from "../didcomm.js";
 import {
   getPrivateJSONObject,
   uploadPrivateJSONObject,
-} from '../ipfs/privatePinataAPI.js';
-import { execute, fetchFirst } from '../ipfsRegister.js';
-import { getSchema } from '../schemaRegistry.js';
-import { hashIdentityObject } from '../utils.js';
-import { agent, db } from './server.js';
+} from "../ipfs/privatePinataAPI.js";
+import { execute, fetchFirst } from "../ipfsRegister.js";
+import { getSchema } from "../schemaRegistry.js";
+import { hashIdentityObject } from "../utils.js";
+import { agent, db } from "./server.js";
+import {generate} from "random-words"
 
 async function requestCredentialWithSchema(
   socket: Socket,
@@ -20,7 +21,7 @@ async function requestCredentialWithSchema(
   schemaName: string,
   data: {
     [key: string]: any;
-  },
+  }
 ) {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] VC requested...`);
@@ -32,15 +33,15 @@ async function requestCredentialWithSchema(
       issuerDID,
       did,
       VC.credential,
-      'receiveCredential',
-      'authcrypt',
+      "receiveCredential",
+      "authcrypt"
     );
   } catch (error) {
     const errorMessage =
-      error instanceof Error ? error.message : 'Unknown error';
+      error instanceof Error ? error.message : "Unknown error";
     console.error(`[${timestamp}] Error handling VC Request:`, errorMessage);
-    socket.emit('custom-error', {
-      title: 'Failed to issue credential',
+    socket.emit("custom-error", {
+      title: "Failed to issue credential",
       errorMessage,
     });
   }
@@ -52,16 +53,15 @@ async function requestCredentialWithSchema(
  * @param realWorldIdentity Object containing real-world identity data
  */
 export async function issueCredentialBindingVC(
-  socket: Socket,
   holderDID: string,
   realWorldIdentity: Record<string, any>,
-  schemaName: string,
+  schemaName: string
 ): Promise<void> {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] Issuing Credential Binding VC...`);
 
   try {
-    const issuerDID = (await agent.didManagerGetByAlias({ alias: 'default' }))
+    const issuerDID = (await agent.didManagerGetByAlias({ alias: "default" }))
       .did;
     // 1. Hash the identity
     const identityHash = hashIdentityObject(realWorldIdentity);
@@ -71,7 +71,7 @@ export async function issueCredentialBindingVC(
       holderDID,
       realWorldIdentity,
       365 * 24 * 60 * 60, // 1 year
-      schemaName,
+      schemaName
     );
 
     // 3. Upload encrypted VC to IPFS
@@ -85,7 +85,7 @@ export async function issueCredentialBindingVC(
         encryptedCID: encryptedIdentityCID,
       },
       365 * 24 * 60 * 60, // 1 year
-      'CredentialBinding',
+      "CredentialBinding"
     );
 
     // 5. Store the bindingVC ID in the database
@@ -98,19 +98,20 @@ export async function issueCredentialBindingVC(
       issuerDID,
       holderDID,
       credentialBindingVC,
-      'receiveCredential',
-      'authcrypt',
+      "receiveCredential",
+      "authcrypt"
     );
   } catch (error) {
     const errorMessage =
-      error instanceof Error ? error.message : 'Unknown error';
+      error instanceof Error ? error.message : "Unknown error";
     console.log(
-      `Failed to issue CredentialBinding and IdentityCredential: ${errorMessage}`,
+      `Failed to issue CredentialBinding and IdentityCredential: ${errorMessage}`
     );
-    socket.emit('custom-error', {
-      title: 'Failed to issue CredentialBinding and IdentityCredential',
-      errorMessage,
-    });
+    // socket.emit('custom-error', {
+    //   title: 'Failed to issue CredentialBinding and IdentityCredential',
+    //   errorMessage,
+    // });
+    throw error;
   }
 }
 
@@ -120,8 +121,8 @@ export async function issueCredentialBindingVC(
  * @param vcID ID of the CredentialBinding VC
  */
 export async function retrieveIdentityByVCID(
-  socket: Socket,
-  vcID: string,
+  socket: Socket | null,
+  vcID: string
 ): Promise<void> {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] Retrieving identity from VC ID: ${vcID}`);
@@ -131,12 +132,12 @@ export async function retrieveIdentityByVCID(
     const row = (await fetchFirst(
       db,
       `SELECT * FROM cids WHERE bindingVCID = ?`,
-      [vcID],
+      [vcID]
     )) as TCidRow;
 
-    db.all('SELECT * FROM cids', [], (err, rows) => {
-      if (err) console.error('Error querying cids:', err);
-      else console.log('Current CID rows:', rows);
+    db.all("SELECT * FROM cids", [], (err, rows) => {
+      if (err) console.error("Error querying cids:", err);
+      else console.log("Current CID rows:", rows);
     });
 
     if (!row || !row.cid) {
@@ -146,13 +147,13 @@ export async function retrieveIdentityByVCID(
     // 2. Retrieve and decrypt VC
     const encryptedData = await getPrivateJSONObject(row.cid);
     if (!encryptedData.encryptedCredential) {
-      throw new Error('Missing encryptedCredential in IPFS object');
+      throw new Error("Missing encryptedCredential in IPFS object");
     }
 
-    const did = await agent.didManagerGetByAlias({ alias: 'default' });
-    const encKey = did.keys.find(k => k.type === 'X25519');
+    const did = await agent.didManagerGetByAlias({ alias: "default" });
+    const encKey = did.keys.find((k) => k.type === "X25519");
     if (!encKey) {
-      throw new Error('No X25519 encryption key found for DID');
+      throw new Error("No X25519 encryption key found for DID");
     }
 
     const decrypted = await agent.keyManagerDecryptJWE({
@@ -168,20 +169,23 @@ export async function retrieveIdentityByVCID(
     const computedHash = hashIdentityObject(identityData);
     if (storedHash && storedHash !== computedHash) {
       throw new Error(
-        `Identity hash mismatch — computed: ${computedHash}, stored: ${storedHash}`,
+        `Identity hash mismatch — computed: ${computedHash}, stored: ${storedHash}`
       );
     }
 
     // 4. Success
     console.log(`[${timestamp}] Identity successfully verified`);
-    socket.emit('identity-retrieved', identityData);
+    if (socket) socket.emit("identity-retrieved", identityData);
+    return identityData;
   } catch (error) {
     const errorMessage =
       error instanceof Error
         ? error.message
-        : 'Unknown error retrieving identity';
+        : "Unknown error retrieving identity";
     console.error(`[${timestamp}] Error: ${errorMessage}`);
-    socket.emit('identity-retrieve-error', { vcID, error: errorMessage });
+    if (socket)
+      socket.emit("identity-retrieve-error", { vcID, error: errorMessage });
+    throw error;
   }
 }
 
@@ -195,13 +199,13 @@ export async function retrieveIdentityByVCID(
  * challengeOwnership(socket, 'did:ethr:0x123abc', 'did:ethr:0x456def', didToSocketMap);
  */
 export async function challengeOwnership(
-  socket: Socket,
+  socket: Socket | null,
   issuerDID: string,
   did: string,
   didToSocketMap: Map<
     string,
-    { socket: Socket; timeout: NodeJS.Timeout; challenge: string }
-  >,
+    { socket: Socket | null; timeout: NodeJS.Timeout; challenge: string }
+  >
 ) {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] Verifying ownership for DID: ${did}`);
@@ -212,36 +216,42 @@ export async function challengeOwnership(
       clearTimeout(didToSocketMap.get(did)!.timeout);
     }
 
-    const challenge = `The quick brown fox jumps over the lazy dog`;
-
+    // const challenge = `The quick brown fox jumps over the lazy dog`;
+    
+    const randomArr = generate(9) as string[];
+    const challenge = randomArr.join(" ");
     // Set a timeout for ownership verification
     const timeout = setTimeout(
       () => handleTimeout(did, didToSocketMap),
-      5 * 60 * 1000,
+      5 * 60 * 1000
     ); // 5 minutes
 
-    // Store the socket, timeout, and challenge in the map
+    // Store the socket (can be null), timeout, and challenge in the map
+    // This allows verification to work even without a socket connection
     didToSocketMap.set(did, { socket, timeout, challenge });
-
+    
     // Send the challenge message
     await sendDIDCommMessage(
       issuerDID,
       did,
       { challenge },
-      'verifyOwnership',
-      'authcrypt',
+      "verifyOwnership",
+      "authcrypt"
     );
+    
+    console.log(`[${timestamp}] Challenge sent to ${did}, stored in map`);
   } catch (error) {
     const errorMessage =
       error instanceof Error
         ? error.message
-        : 'Unknown Error verifying ownership';
+        : "Unknown Error verifying ownership";
     console.error(`[${timestamp}] Error verifying ownership:`, error);
     didToSocketMap.delete(did); // Clean up on error
-    socket.emit('custom-error', {
-      title: `Failed to send ownership challenge for ${did}`,
-      errorMessage,
-    });
+    if (socket)
+      socket.emit("custom-error", {
+        title: `Failed to send ownership challenge for ${did}`,
+        errorMessage,
+      });
   }
 }
 
@@ -250,20 +260,22 @@ function handleTimeout(
   did: string,
   didToSocketMap: Map<
     string,
-    { socket: Socket; timeout: NodeJS.Timeout; challenge: string }
-  >,
+    { socket: Socket | null; timeout: NodeJS.Timeout; challenge: string }
+  >
 ) {
   const timestamp = new Date().toISOString();
   console.log(
-    `[${timestamp}] Ownership verification timed out for DID: ${did}`,
+    `[${timestamp}] Ownership verification timed out for DID: ${did}`
   );
 
   const entry = didToSocketMap.get(did);
   if (entry) {
-    entry.socket.emit('custom-error', {
-      title: `Failed to send ownership challenge for ${did}`,
-      errorMessage: 'Ownership verification timed out',
-    });
+    if (entry.socket) {
+      entry.socket.emit("custom-error", {
+        title: `Failed to send ownership challenge for ${did}`,
+        errorMessage: "Ownership verification timed out",
+      });
+    }
     didToSocketMap.delete(did);
   }
 }
@@ -279,44 +291,68 @@ export async function ownershipVerification(
   res: Response,
   didToSocketMap: Map<
     string,
-    { socket: Socket; timeout: NodeJS.Timeout; challenge: string }
-  >,
+    { socket: Socket | null; timeout: NodeJS.Timeout; challenge: string }
+  >
 ) {
   const timestamp = new Date().toISOString();
   console.log(`[${timestamp}] Ownership verification request received...`);
 
   try {
     const { senderDID, challenge, response } = await extractVerificationData(
-      req.body,
+      req.body
     );
 
     const entry = didToSocketMap.get(senderDID);
     if (!entry) {
       console.error(
-        `[${timestamp}] No active socket found for DID: ${senderDID}`,
+        `[${timestamp}] No challenge entry found for DID: ${senderDID}`
       );
       return res
         .status(400)
-        .send('No active socket found for the provided DID');
+        .json({ 
+          error: "No active challenge found for the provided DID",
+          message: "The challenge may have expired or was never sent"
+        });
     }
 
     if (challenge !== entry.challenge) {
-      return res.status(400).send('Invalid challenge response');
+      console.error(
+        `[${timestamp}] Challenge mismatch for DID: ${senderDID}. Expected: ${entry.challenge}, Received: ${challenge}`
+      );
+      return res.status(400).json({ 
+        error: "Invalid challenge response",
+        message: "The challenge response does not match the original challenge"
+      });
     }
 
+    // Clear the timeout since we received a valid response
     clearTimeout(entry.timeout);
-    entry.socket.emit('challenge-response', senderDID, response);
-    didToSocketMap.delete(senderDID); // Clean up after sending response
+    
+    // Emit to socket if available (for real-time updates)
+    if (entry.socket) {
+      entry.socket.emit("challenge-response", senderDID, response);
+    }
+    
+    // Clean up after sending response
+    didToSocketMap.delete(senderDID);
 
-    res.status(200).send('Ownership verification successful');
+    console.log(
+      `[${timestamp}] Ownership verification successful for DID: ${senderDID}, Response: ${response}`
+    );
+    
+    res.status(200).json({ 
+      message: "Ownership verification successful",
+      verified: response === true,
+      did: senderDID
+    });
   } catch (error) {
     console.error(
       `[${timestamp}] Error handling ownership verification:`,
-      error,
+      error
     );
     const errorMessage =
-      error instanceof Error ? error.message : 'Invalid message format';
-    res.status(400).send(errorMessage);
+      error instanceof Error ? error.message : "Invalid message format";
+    res.status(400).json({ error: errorMessage });
   }
 }
 
@@ -327,7 +363,7 @@ async function extractVerificationData(body: any) {
   const senderDID = unpackedMessage.message.from;
 
   if (!senderDID || !challenge || response === undefined) {
-    throw new Error('Invalid message format');
+    throw new Error("Invalid message format");
   }
 
   return { senderDID, challenge, response };
@@ -343,7 +379,7 @@ async function validateSchema(
   issuerDID: string,
   schemaName: string,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  data: Record<string, any>,
+  data: Record<string, any>
 ): Promise<boolean> {
   // Find the schema based on schemaName
   const schema = (await getSchema(issuerDID, schemaName)) as TSchema;
@@ -362,7 +398,7 @@ async function validateSchema(
       console.error(
         `Field "${fieldName}" should be of type "${type}", but got "${typeof data[
           fieldName
-        ]}"`,
+        ]}"`
       );
       return false;
     }
@@ -381,23 +417,23 @@ async function validateRequest(
   schemaName: string,
   data: {
     [key: string]: any;
-  },
+  }
 ): Promise<boolean> {
-  if (!issuerDID || typeof issuerDID !== 'string') {
-    throw Error('Invalid issuer DID provided');
+  if (!issuerDID || typeof issuerDID !== "string") {
+    throw Error("Invalid issuer DID provided");
   }
 
-  if (!schemaName || typeof schemaName !== 'string') {
-    throw Error('Invalid schema name provided');
+  if (!schemaName || typeof schemaName !== "string") {
+    throw Error("Invalid schema name provided");
   }
 
-  if (!data || typeof data !== 'object') {
-    throw Error('Invalid data provided');
+  if (!data || typeof data !== "object") {
+    throw Error("Invalid data provided");
   }
 
   const validatedSchema = await validateSchema(issuerDID, schemaName, data);
   if (!validatedSchema) {
-    throw Error('Invalid schema or data provided');
+    throw Error("Invalid schema or data provided");
   }
 
   return true;
@@ -413,11 +449,11 @@ async function uploadVC(credential: VerifiableCredential) {
   console.log(`[${timestamp}] Uploading VC to IPFS...`);
   try {
     const vcId = credential.id;
-    const did = await agent.didManagerGetByAlias({ alias: 'default' });
-    const encKey = did.keys.find(key => key.type === 'X25519');
+    const did = await agent.didManagerGetByAlias({ alias: "default" });
+    const encKey = did.keys.find((key) => key.type === "X25519");
 
     if (!encKey) {
-      throw new Error('X25519 encryption key not found for DID');
+      throw new Error("X25519 encryption key not found for DID");
     }
 
     // Encrypt the VC
@@ -435,7 +471,7 @@ async function uploadVC(credential: VerifiableCredential) {
 
     const cid = uploadResponse?.cid;
     if (!cid) {
-      throw new Error('Failed to upload VC to IPFS');
+      throw new Error("Failed to upload VC to IPFS");
     }
 
     await execute(db, `INSERT OR IGNORE INTO cids (cid) VALUES (?)`, [cid]);
@@ -445,11 +481,11 @@ async function uploadVC(credential: VerifiableCredential) {
       cid,
     ]);
 
-    console.log('VC uploaded to IPFS:', cid);
+    console.log("VC uploaded to IPFS:", cid);
     return cid;
   } catch (error) {
     const errorMessage =
-      error instanceof Error ? error.message : 'Failed to upload credential';
+      error instanceof Error ? error.message : "Failed to upload credential";
     console.error(`[${timestamp}] Error uploading credential:`, error);
     throw new Error(errorMessage);
   }

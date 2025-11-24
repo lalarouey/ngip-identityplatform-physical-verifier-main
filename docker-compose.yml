@@ -10,6 +10,8 @@ services:
       - ./backend/.env
     volumes:
       - ./backend/data:/app/data
+    networks:
+      - my_shared_network
     restart: unless-stopped
 
   verifier-frontend:
@@ -21,4 +23,10 @@ services:
       - "5176:80"
     depends_on:
       - verifier-backend
+    networks:
+      - my_shared_network
     restart: unless-stopped
+
+networks:
+  my_shared_network:
+    external: true

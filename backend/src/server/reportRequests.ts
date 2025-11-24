@@ -31,7 +31,7 @@ export async function handleReport(io: Server, req: Request, res: Response) {
 }
 
 export async function sendIdentityToIssuer(
-  socket: Socket,
+  socket: Socket | null,
   verifierDID: string,
   issuerDID: string,
   identity: Record<string, any>,
@@ -54,6 +54,7 @@ export async function sendIdentityToIssuer(
       `[${new Date().toISOString()}] Error sending identity:`,
       errorMessage,
     );
-    socket.emit('custom-error', {title: "Failed to send Identity", errorMessage})
+    if(socket) socket.emit('custom-error', {title: "Failed to send Identity", errorMessage});
+    throw socket;
   }
 }
