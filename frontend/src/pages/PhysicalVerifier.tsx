@@ -139,7 +139,7 @@ export default function PhysicalVerifier() {
       // Convert Schema[] to TSchema[] by ensuring schemaFields is a tuple
       const convertedSchemas: TSchema[] = result.schemas.map((schema) => ({
         ...schema,
-        schemaFields: schema.schemaFields.length > 0 
+        schemaFields: schema.schemaFields.length > 0
           ? [schema.schemaFields[0], ...schema.schemaFields.slice(1)] as [TField, ...TField[]]
           : [{ fieldName: '', type: 'string' }] as [TField, ...TField[]]
       }));
@@ -243,6 +243,11 @@ export default function PhysicalVerifier() {
           overflowY: "auto", // Allow scrolling for large content
         }}
       >
+        {socket && socket.connected && (
+          <div style={{ padding: '20px', borderBottom: '1px solid #eee', backgroundColor: '#f8f9fa' }}>
+            <h1 style={{ margin: 0, color: '#1e3a8a' }}>Doctor Portal (NGP)</h1>
+          </div>
+        )}
         {socket && socket.connected && renderComponent()}
       </div>
     </div>

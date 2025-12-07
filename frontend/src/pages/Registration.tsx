@@ -35,16 +35,16 @@ export default function Registration({
   const form = useForm({
     initialValues: selectedSchemaObject
       ? selectedSchemaObject.schemaFields.reduce((acc, field) => {
-          acc[field.fieldName] = '';
-          return acc;
-        }, {} as { [key: string]: any })
+        acc[field.fieldName] = '';
+        return acc;
+      }, {} as { [key: string]: any })
       : {},
     validate: selectedSchemaObject
       ? selectedSchemaObject.schemaFields.reduce((acc, field) => {
-          acc[field.fieldName] = value =>
-            value ? null : `${capitalize(field.fieldName)} is required`;
-          return acc;
-        }, {} as { [key: string]: (value: any) => string | null })
+        acc[field.fieldName] = value =>
+          value ? null : `${capitalize(field.fieldName)} is required`;
+        return acc;
+      }, {} as { [key: string]: (value: any) => string | null })
       : {},
   });
 
@@ -79,7 +79,7 @@ export default function Registration({
       });
 
       await api.verifyOwnership(recipientDID, verifierDID);
-      
+
       // Note: The actual challenge response will come via Socket.IO or polling
       // For now, we'll set a timeout to check for response
       // In a real implementation, you might want to poll or use WebSockets
@@ -197,8 +197,8 @@ export default function Registration({
           </Button>
           <form onSubmit={handleSendChallenge}>
             <TextInput
-              label='Recipient DID'
-              placeholder='Enter Recipient DID'
+              label='Patient DID'
+              placeholder='Enter Patient DID'
               value={recipientDID}
               onChange={e => setRecipientDID(e.target.value)}
               required

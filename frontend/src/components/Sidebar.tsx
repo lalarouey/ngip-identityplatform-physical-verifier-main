@@ -76,7 +76,7 @@ export default function Sidebar({
         }}
       >
         <NavLink
-          label='Registration'
+          label='Access Patient Records'
           color={
             activeTab === 'registration' ? ACTIVE_TAB_COLOR : BACKGROUND_COLOR
           }
