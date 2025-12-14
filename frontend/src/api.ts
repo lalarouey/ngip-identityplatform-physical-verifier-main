@@ -218,5 +218,51 @@ export const api = {
     }
     return response.json();
   },
-};
 
+
+  // Request Delegation
+  async requestDelegation(
+    recipientDID: string,
+    scope: string,
+    purpose: string,
+    audience: string[],
+    expiry?: string
+  ): Promise<{ message: string }> {
+    const response = await fetch(`${API_BASE_URL}/request-delegation`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ recipientDID, scope, purpose, audience, expiry }),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to request delegation");
+    }
+    return response.json();
+  },
+
+  // Get Held Credentials
+  async getHeldCredentials(): Promise<{ credentials: any[] }> {
+    const response = await fetch(`${API_BASE_URL}/held-credentials`);
+    if (!response.ok) {
+      throw new Error("Failed to fetch held credentials");
+    }
+    return response.json();
+  },
+
+  // Request Data Access
+  async requestDataAccess(
+    delegationVcId: string,
+    targetDID: string
+  ): Promise<{ message: string; data?: any }> {
+    const response = await fetch(`${API_BASE_URL}/request-data-access`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ delegationVcId, targetDID }),
+    });
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.error || "Failed to request data access");
+    }
+    return response.json();
+  },
+};

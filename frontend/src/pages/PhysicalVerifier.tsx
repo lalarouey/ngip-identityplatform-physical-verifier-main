@@ -8,12 +8,13 @@ import { io, Socket } from "socket.io-client";
 import { TReport, TSchema, TField } from "types";
 import SchemaDashboard from "./SchemaDashboard";
 import { api } from "../api";
+import DelegationRequest from "components/DelegationRequest";
 
 export default function PhysicalVerifier() {
   const [socket, setSocket] = useState<Socket | null>(null);
   const [connected, setConnected] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<
-    "registration" | "reports" | "schemaDashboard" | "myPage" | null
+    "registration" | "reports" | "schemaDashboard" | "myPage" | "delegationRequest" | null
   >(null);
   const [schemas, setSchemas] = useState<TSchema[]>([]);
   const [dids, setDids] = useState<string[]>([]);
@@ -210,6 +211,8 @@ export default function PhysicalVerifier() {
             onRefresh={fetchIdentifierInfo}
           />
         );
+      case "delegationRequest":
+        return <DelegationRequest />;
       default:
         return null;
     }

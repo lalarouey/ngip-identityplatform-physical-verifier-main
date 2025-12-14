@@ -8,10 +8,10 @@ export default function Sidebar({
   connectSocket,
   disconnectSocket,
 }: {
-  activeTab: 'registration' | 'reports' | 'schemaDashboard' | 'myPage' | null;
+  activeTab: 'registration' | 'reports' | 'schemaDashboard' | 'myPage' | 'delegationRequest' | null;
   setActiveTab: React.Dispatch<
     React.SetStateAction<
-      'registration' | 'reports' | 'schemaDashboard' | 'myPage' | null
+      'registration' | 'reports' | 'schemaDashboard' | 'myPage' | 'delegationRequest' | null
     >
   >;
   connected: boolean;
@@ -107,6 +107,19 @@ export default function Sidebar({
           active
           variant='filled'
           onClick={() => setActiveTab('schemaDashboard')}
+          disabled={!connected}
+          style={{
+            height: '50px',
+          }}
+        />
+        <NavLink
+          label='Delegation Requests'
+          color={
+            activeTab == 'delegationRequest' ? ACTIVE_TAB_COLOR : BACKGROUND_COLOR
+          }
+          active
+          variant='filled'
+          onClick={() => setActiveTab('delegationRequest')}
           disabled={!connected}
           style={{
             height: '50px',

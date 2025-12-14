@@ -12,7 +12,7 @@ import { execute, fetchFirst } from "../ipfsRegister.js";
 import { getSchema } from "../schemaRegistry.js";
 import { hashIdentityObject } from "../utils.js";
 import { agent, db } from "./server.js";
-import {generate} from "random-words"
+import { generate } from "random-words"
 
 async function requestCredentialWithSchema(
   socket: Socket,
@@ -217,7 +217,7 @@ export async function challengeOwnership(
     }
 
     // const challenge = `The quick brown fox jumps over the lazy dog`;
-    
+
     const randomArr = generate(9) as string[];
     const challenge = randomArr.join(" ");
     // Set a timeout for ownership verification
@@ -229,7 +229,7 @@ export async function challengeOwnership(
     // Store the socket (can be null), timeout, and challenge in the map
     // This allows verification to work even without a socket connection
     didToSocketMap.set(did, { socket, timeout, challenge });
-    
+
     // Send the challenge message
     await sendDIDCommMessage(
       issuerDID,
@@ -238,7 +238,7 @@ export async function challengeOwnership(
       "verifyOwnership",
       "authcrypt"
     );
-    
+
     console.log(`[${timestamp}] Challenge sent to ${did}, stored in map`);
   } catch (error) {
     const errorMessage =
@@ -309,7 +309,7 @@ export async function ownershipVerification(
       );
       return res
         .status(400)
-        .json({ 
+        .json({
           error: "No active challenge found for the provided DID",
           message: "The challenge may have expired or was never sent"
         });
@@ -319,7 +319,7 @@ export async function ownershipVerification(
       console.error(
         `[${timestamp}] Challenge mismatch for DID: ${senderDID}. Expected: ${entry.challenge}, Received: ${challenge}`
       );
-      return res.status(400).json({ 
+      return res.status(400).json({
         error: "Invalid challenge response",
         message: "The challenge response does not match the original challenge"
       });
@@ -327,20 +327,20 @@ export async function ownershipVerification(
 
     // Clear the timeout since we received a valid response
     clearTimeout(entry.timeout);
-    
+
     // Emit to socket if available (for real-time updates)
     if (entry.socket) {
       entry.socket.emit("challenge-response", senderDID, response);
     }
-    
+
     // Clean up after sending response
     didToSocketMap.delete(senderDID);
 
     console.log(
       `[${timestamp}] Ownership verification successful for DID: ${senderDID}, Response: ${response}`
     );
-    
-    res.status(200).json({ 
+
+    res.status(200).json({
       message: "Ownership verification successful",
       verified: response === true,
       did: senderDID
@@ -397,7 +397,7 @@ async function validateSchema(
     if (typeof data[fieldName] !== type) {
       console.error(
         `Field "${fieldName}" should be of type "${type}", but got "${typeof data[
-          fieldName
+        fieldName
         ]}"`
       );
       return false;
@@ -488,5 +488,35 @@ async function uploadVC(credential: VerifiableCredential) {
       error instanceof Error ? error.message : "Failed to upload credential";
     console.error(`[${timestamp}] Error uploading credential:`, error);
     throw new Error(errorMessage);
+  }
+}
+
+export async function receiveCredential(req: Request, res: Response) {
+  const timestamp = new Date().toISOString();
+  console.log(`[${timestamp}] Receiving credential...`);
+  try {
+    const unpackedDIDCommMessage = await resolveDIDCommMessage(req.body);
+    const credential = unpackedDIDCommMessage.message.body;
+
+    if (!credential || !credential.id || !credential.issuer) {
+      throw new Error("Invalid credential format");
+    }
+
+    const issuerDID = typeof credential.issuer === 'string' ? credential.issuer : credential.issuer.id;
+    const type = Array.isArray(credential.type) ? credential.type.join(',') : credential.type;
+
+    await execute(
+      db,
+      `INSERT OR IGNORE INTO held_credentials (vcID, issuerDID, type, credential) VALUES (?, ?, ?, ?)`,
+      [credential.id, issuerDID, type, JSON.stringify(credential)]
+    );
+
+    console.log(`[${timestamp}] Credential received and stored: ${credential.id}`);
+    res.status(200).json({ message: "Credential received successfully" });
+  } catch (error) {
+    console.error(`[${timestamp}] Error receiving credential:`, error);
+    res.status(500).json({
+      error: error instanceof Error ? error.message : "Failed to receive credential",
+    });
   }
 }

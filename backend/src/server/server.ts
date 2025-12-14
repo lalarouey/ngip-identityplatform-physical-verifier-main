@@ -5,7 +5,7 @@ import http from "http";
 import sqlite3 from "sqlite3";
 import { TSchema } from "types.js";
 import { allowedOrigins, PORT } from "../config.js";
-import { execute } from "../ipfsRegister.js";
+import { execute, fetchAll } from "../ipfsRegister.js";
 import {
   challengeOwnership,
   issueCredentialBindingVC,
@@ -27,6 +27,9 @@ import {
 } from "./schemaRequests.js";
 import { handleReport, sendIdentityToIssuer } from "./reportRequests.js";
 import { Server, Socket } from "socket.io";
+import { requestDelegation } from "./delegationRequests.js";
+import { receiveCredential } from "./VcRequests.js";
+import { requestDataAccess } from "./dataAccessRequests.js";
 
 export const agent = await getAgent({
   didProviderConfigs: [
@@ -63,6 +66,18 @@ await execute(
   []
 );
 
+await execute(
+  db,
+  `CREATE TABLE IF NOT EXISTS held_credentials (
+    vcID TEXT PRIMARY KEY,
+    issuerDID TEXT NOT NULL,
+    type TEXT,
+    credential JSON,
+    receivedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+  )`,
+  []
+);
+
 // ---------- Setup DIDs ----------
 const ethIdentifier = await agent.didManagerGetOrCreate({
   alias: "default",
@@ -93,7 +108,7 @@ io.on("connection", (socket) => {
     console.log("Registered DID:", did);
     didToSocketMap.set(did, {
       socket,
-      timeout: setTimeout(() => {}, 0),
+      timeout: setTimeout(() => { }, 0),
       challenge: "",
     });
   });
@@ -237,6 +252,31 @@ app.post("/ownership-verification", async (req, res) => {
 
 app.post("/report-abuse", async (req, res) => {
   handleReport(io, req, res);
+});
+
+app.post("/request-delegation", async (req, res) => {
+  await requestDelegation(req, res);
+});
+
+app.post("/receive-credential", async (req, res) => {
+  await receiveCredential(req, res);
+});
+
+app.post("/request-data-access", async (req, res) => {
+  await requestDataAccess(req, res);
+});
+
+app.get("/held-credentials", async (req, res) => {
+  try {
+    const credentials = await fetchAll(
+      db,
+      "SELECT * FROM held_credentials ORDER BY receivedAt DESC",
+      []
+    );
+    res.json({ credentials });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to fetch credentials" });
+  }
 });
 
 server.listen(port, "0.0.0.0", async () => {
